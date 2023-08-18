@@ -1,0 +1,11 @@
+node controller(red, green, blue: bool) returns (velocity_left, velocity_right: int)
+let
+	velocity_left = 255 -> if red then 0
+				else if green then 250
+				else if blue then 125
+				else pre(velocity_left);
+	velocity_right = 255 -> if red then 0
+				else if green then 250
+				else if blue then 125
+				else pre(velocity_left);
+tel

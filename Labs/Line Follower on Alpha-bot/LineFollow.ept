@@ -1,0 +1,66 @@
+type modes = Two | Three | Seven | Eleven | Twelve
+
+const thresh: int = 30
+const kp: int = 10
+const kd: int = 100
+const ki: int = 1000
+const base_speed: int = 100              -- MAXSPEED = 2*BASESPEED
+const actualMin: int = 0                 -- Calibration
+const actualMax: int = 50
+
+node line_follow(s1, s2, s3, s4, s5: int) returns (ldir, rdir, left_vel, right_vel: int; nodenum: modes)
+var wtAvg, prop, diff, integ, pid:int;
+    s: int^5;
+let
+ s = [(s1-actualMin)*1000/(actualMax-actualMin), (s2-actualMin)*1000/(actualMax-actualMin), (s3-actualMin)*1000/(actualMax-actualMin), (s4-actualMin)*1000/(actualMax-actualMin), (s5-actualMin)*1000/(actualMax-actualMin)];
+ wtAvg = if ((s[0]+s[1]+s[2]+s[3]+s[4]) > 0) then (1000*s[1]+2000*s[2]+3000*s[3]+4000*s[4])/(s[0]+s[1]+s[2]+s[3]+s[4]) else 0;
+ prop = wtAvg - 2000;
+ diff = prop -> (prop - pre(prop));
+ integ = prop -> (pre(integ) + prop);
+ pid = prop/kp + diff/kd + integ/ki;
+ 
+ automaton 	
+ 	state Straight
+ 		do  left_vel = if (pid<base_speed) then (base_speed+pid) else 2*base_speed; 
+ 		    right_vel = if (base_speed+pid>0) then (base_speed-pid) else 2*base_speed;
+ 		    ldir = 1; rdir = 1; nodenum = Twelve;
+ 	unless (s[2]>thresh) and ((s[3]>thresh and s[4]>thresh) or (s[1]>thresh and s[0]>thresh)) continue Turn
+ 
+ 	state Turn                                                     -- A node is encountered
+ 	var iter: modes;
+    	last next_iter: modes = Two;
+ 		do iter = last next_iter;
+                nodenum = iter;
+ 	        switch iter               
+        	| Two do rdir = 1; ldir = 1;      -- node 2; bot intended to go straight
+                left_vel = base_speed;
+                right_vel = base_speed;
+                next_iter = if s[2]>thresh then Three else Two;
+               
+        	| Three do rdir = 1; ldir = 0;      -- node 3; bot will have to turn left
+                left_vel = 0;
+                right_vel = if (base_speed + pid) > 0 then (base_speed - pid) else 2*base_speed;
+                next_iter = if s[2]>thresh then Seven else Three;
+        
+        	| Seven do rdir = 1; ldir = 1;      -- node 7; bot goes straight
+                left_vel = base_speed;
+                right_vel = base_speed;
+                next_iter = if s[2]>thresh then Eleven else Seven;
+        
+        	| Eleven do rdir = 0; ldir = 1;      -- node 11; bot turns right
+                 left_vel = if (pid < base_speed) then (base_speed + pid) else 2*base_speed;
+                 right_vel = 0;
+                 next_iter = if s[2]>thresh then Twelve else Eleven;
+        
+        	| Twelve do rdir = 1; ldir = 1;     -- node 12; bot stops
+                 left_vel = 0; right_vel = 0;
+                 next_iter = Twelve;   
+ end; 
+ 	--until (left_vel = 0 and right_vel = 0) then Stop
+ 	until (s[2] > thresh) then Straight
+ 	    
+ 	--state Stop
+ 	--	do  ldir = 1; rdir = 1; nodenum = Twelve;
+ 	--	    left_vel = 0; right_vel = 0;
+ end
+tel
